@@ -15,6 +15,7 @@ import {FixedPointMathLib} from "solmate/src/utils/FixedPointMathLib.sol";
 import {Hooks} from "v4-core/libraries/Hooks.sol";
 import {IQuoter} from "v4-periphery/src/interfaces/IQuoter.sol";
 import {BeforeSwapDelta, toBeforeSwapDelta} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 
 contract RouterHook is BaseHook {
     using StateLibrary for IPoolManager;
@@ -67,14 +68,27 @@ contract RouterHook is BaseHook {
         // perform JIT
         if (swapParams.amountSpecified > LARGE_SWAP_THRESHOLD) {
             // Calculate the new tick after the swap
-            int24 newTick = TickMath.getTickAtSqrtPrice(sqrtPriceX96After);
-            // uint256 liquidity = poolManager.
+            int24 newTick = TickMath.getTickAtSqrtPrice(sqrtPriceX96After); //returns the higher tick range...
+
+            int24 tickLower = newTick - key.tickSpacing;
+            int24 tickUpper = newTick;
+            int256 liquidity = LARGE_SWAP_THRESHOLD * 2;
+            poolManager.modifyLiquidity(
+                key,
+                IPoolManager.ModifyLiquidityParams({
+                    tickLower: tickLower,
+                    tickUpper: tickUpper,
+                    liquidityDelta: liquidity,
+                    salt: 0
+                }),
+                hookData
+            );
         }
         // get jit address to get liquidity from ...
         // get amount to be swapped if large enough then
         // get price tick the large swap would occur at
         // add liquidity to the price tick
-        // revert HookNotImplemented();getSlot0
+        // revert HookNotImplemented();
         return (this.beforeSwap.selector, delta, 0);
     }
 
