@@ -5,20 +5,6 @@ import {Test, console2} from "forge-std/Test.sol";
 import {JITRebalancer} from "../src/JITRebalancer.sol";
 import {MockERC20} from "../src/mock/MockERC20.sol";
 
-import {BaseHook} from "v4-periphery/src/base/hooks/BaseHook.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {CurrencyLibrary, Currency} from "v4-core/types/Currency.sol";
-import {PoolKey} from "v4-core/types/PoolKey.sol";
-import {BalanceDeltaLibrary, BalanceDelta} from "v4-core/types/BalanceDelta.sol";
-import {PoolId, PoolIdLibrary} from "v4-core/types/PoolId.sol";
-import {PoolKey} from "v4-core/types/PoolKey.sol";
-import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
-import {TickMath} from "v4-core/libraries/TickMath.sol";
-import {BalanceDelta} from "v4-core/types/BalanceDelta.sol";
-import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
-import {FixedPointMathLib} from "solmate/src/utils/FixedPointMathLib.sol";
-import {Hooks} from "v4-core/libraries/Hooks.sol";
 
 contract JITRebalancerTest is Test {
     JITRebalancer jitRebalancer;

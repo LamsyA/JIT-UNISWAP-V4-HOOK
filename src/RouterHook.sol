@@ -31,12 +31,13 @@ contract RouterHook is BaseHook {
     mapping(address token0 => mapping(address token1 => address rebalancerAddress)) public deployedRebalancerAddress;
     int256 LARGE_SWAP_THRESHOLD = 1 ether;
 
-    function rebalancerFactory(address _token0, address _token1) public {
+    function rebalancerFactory(address _token0, address _token1) public returns (address) {
         address rebalance = deployedRebalancerAddress[_token0][_token1];
         require(rebalance == address(0), "JIT: Hook already deployed for pair");
 
         JITRebalancer jitRebalancer = new JITRebalancer(_token0, _token1, address(this));
         deployedRebalancerAddress[_token0][_token1] = address(jitRebalancer);
+        return address(jitRebalancer);
     }
 
     function beforeSwap(
@@ -67,7 +68,12 @@ contract RouterHook is BaseHook {
 
         // perform JIT
         if (swapParams.amountSpecified > LARGE_SWAP_THRESHOLD) {
-            // Calculate the new tick after the swap
+            // to get the direction of the swap....
+            address token = zeroForOne ? Currency.unwrap(key.currency0) : Currency.unwrap(key.currency1);
+            // withdraw token from pair pool....
+            IERC20(token).transferFrom(jit, address(this), uint256(LARGE_SWAP_THRESHOLD * 2));
+
+            // Calculate the new tick after the swap......
             int24 newTick = TickMath.getTickAtSqrtPrice(sqrtPriceX96After); //returns the higher tick range...
 
             int24 tickLower = newTick - key.tickSpacing;
@@ -103,8 +109,8 @@ contract RouterHook is BaseHook {
             afterInitialize: false,
             beforeAddLiquidity: false,
             beforeRemoveLiquidity: false,
-            afterAddLiquidity: true,
-            afterRemoveLiquidity: true,
+            afterAddLiquidity: false,
+            afterRemoveLiquidity: false,
             beforeSwap: true,
             afterSwap: true,
             beforeDonate: false,
