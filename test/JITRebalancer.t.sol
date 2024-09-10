@@ -5,7 +5,6 @@ import {Test, console2} from "forge-std/Test.sol";
 import {JITRebalancer} from "../src/JITRebalancer.sol";
 import {MockERC20} from "../src/mock/MockERC20.sol";
 
-
 contract JITRebalancerTest is Test {
     JITRebalancer jitRebalancer;
     MockERC20 token0;
