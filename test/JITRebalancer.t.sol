@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Test, console2} from "forge-std/Test.sol";
 import {JITRebalancer} from "../src/JITRebalancer.sol";
 import {MockERC20} from "../src/mock/MockERC20.sol";
+import {HelperConfig} from "../script/helperConfig.sol";
 
 contract JITRebalancerTest is Test {
     JITRebalancer jitRebalancer;
@@ -17,8 +18,12 @@ contract JITRebalancerTest is Test {
     function setUp() public {
         token0 = new MockERC20();
         token1 = new MockERC20();
+
+        HelperConfig aggregatorPriceFeed = new HelperConfig();
+        (address wethUsdPriceFeed,,) = aggregatorPriceFeed.activeNetworkConfig();
+        console2.log("wethUsdPriceFeed", wethUsdPriceFeed);
         // to be changed later
-        jitRebalancer = new JITRebalancer(address(token0), address(token1), router, address(0));
+        jitRebalancer = new JITRebalancer(address(token0), address(token1), router, wethUsdPriceFeed);
     }
 
     function test_deposit() public {
@@ -58,5 +63,8 @@ contract JITRebalancerTest is Test {
         );
 
         // assertEq(token1.balanceOf(user1), token1.balanceOf(address(jitRebalancer)) * 1 ether / jitRebalancer.totalSupply());
+    }
+    function test_getPrice() public view {
+        console2.log(jitRebalancer._getPrice());
     }
 }

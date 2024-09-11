@@ -5,6 +5,8 @@ import {Test, console2} from "forge-std/Test.sol";
 import {JITRebalancer} from "../src/JITRebalancer.sol";
 import {MockERC20} from "../src/mock/MockERC20.sol";
 import {BaseHook} from "v4-periphery/src/base/hooks/BaseHook.sol";
+import {HelperConfig} from "../script/helperConfig.sol";
+
 import {PoolSwapTest} from "v4-core/test/PoolSwapTest.sol";
 import {Constants} from "v4-periphery/lib/v4-core/test/utils/Constants.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -34,6 +36,7 @@ contract RouterHookTest is Test, Deployers {
 
     Currency token0;
     Currency token1;
+    address priceFeed;
 
     RouterHook routerHook;
     Quoter public quoter;
@@ -42,6 +45,9 @@ contract RouterHookTest is Test, Deployers {
     function setUp() public {
         // Deploy v4 core contracts
         deployFreshManagerAndRouters();
+        HelperConfig aggregatorPriceFeed = new HelperConfig();
+        (address wethUsdPriceFeed,,) = aggregatorPriceFeed.activeNetworkConfig();
+        priceFeed = wethUsdPriceFeed;
         quoter = new Quoter(manager);
         // Deploy two test tokens
         (token0, token1) = deployMintAndApprove2Currencies();
@@ -97,7 +103,8 @@ contract RouterHookTest is Test, Deployers {
     }
 
     function test_router_can_factory_and_mint_tokens() public {
-        pairPool = routerHook.rebalancerFactory(Currency.unwrap(token0), Currency.unwrap(token1));
+
+        pairPool = routerHook.rebalancerFactory(Currency.unwrap(token0), Currency.unwrap(token1), priceFeed);
         address expectedPairPool = routerHook.getFactoryAddress(Currency.unwrap(token0), Currency.unwrap(token1));
         assertEq(pairPool, expectedPairPool);
         console2.log("pair address", pairPool);
@@ -113,9 +120,9 @@ contract RouterHookTest is Test, Deployers {
         test_router_can_factory_and_mint_tokens();
         uint160 ticks = TickMath.getSqrtPriceAtTick(180);
         IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
-            zeroForOne: false,
+            zeroForOne: true,
             amountSpecified: -20000 ether,
-            sqrtPriceLimitX96: TickMath.MAX_SQRT_PRICE - 1
+            sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1 
         });
 
         PoolSwapTest.TestSettings memory testSettings =
@@ -134,6 +141,7 @@ contract RouterHookTest is Test, Deployers {
             MockERC20(Currency.unwrap(token0)).balanceOf(address(routerHook)),
             MockERC20(Currency.unwrap(token1)).balanceOf(address(routerHook))
         );
+        console2.log("balance of router hook", MockERC20(Currency.unwrap(token1)).balanceOf(address(routerHook)));
     }
 
     function test_add_liquidity_before_swapzeroForOne_false() public {
