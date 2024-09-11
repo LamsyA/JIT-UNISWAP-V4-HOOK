@@ -84,16 +84,16 @@ contract RouterHookTest is Test, Deployers {
         );
 
         // some liquidity for full range
-        // modifyLiquidityRouter.modifyLiquidity(
-        //     key,
-        //     IPoolManager.ModifyLiquidityParams({
-        //         tickLower: TickMath.minUsableTick(60),
-        //         tickUpper: TickMath.maxUsableTick(60),
-        //         liquidityDelta: 10 ether,
-        //         salt: bytes32(0)
-        //     }),
-        //     ZERO_BYTES
-        // );
+        modifyLiquidityRouter.modifyLiquidity(
+            key,
+            IPoolManager.ModifyLiquidityParams({
+                tickLower: TickMath.minUsableTick(60),
+                tickUpper: TickMath.maxUsableTick(60),
+                liquidityDelta: 10 ether,
+                salt: bytes32(0)
+            }),
+            ZERO_BYTES
+        );
     }
 
     function test_router_can_factory_and_mint_tokens() public {
@@ -113,9 +113,9 @@ contract RouterHookTest is Test, Deployers {
         test_router_can_factory_and_mint_tokens();
         uint160 ticks = TickMath.getSqrtPriceAtTick(180);
         IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
-            zeroForOne: true,
-            amountSpecified: 20 ether,
-            sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
+            zeroForOne: false,
+            amountSpecified: -20000 ether,
+            sqrtPriceLimitX96: TickMath.MAX_SQRT_PRICE - 1
         });
 
         PoolSwapTest.TestSettings memory testSettings =

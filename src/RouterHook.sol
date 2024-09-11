@@ -41,6 +41,9 @@ contract RouterHook is BaseHook {
 
         JITRebalancer jitRebalancer = new JITRebalancer(_token0, _token1, address(this));
         deployedRebalancerAddress[_token0][_token1] = address(jitRebalancer);
+        IERC20(_token0).approve(address(poolManager), type(uint256).max);
+        IERC20(_token1).approve(address(poolManager), type(uint256).max);
+
         return address(jitRebalancer);
     }
 
@@ -103,7 +106,7 @@ contract RouterHook is BaseHook {
                 LiquidityAmounts.getAmount1ForLiquidity(sqrtPriceAtTickLower, sqrtPriceAtTickUpper, liquidityDelta);
 
             // Withdraw tokens from JIT address (pool) to contract
-            IERC20(token).transferFrom(jit, address(poolManager), amount1ToAdd);
+            IERC20(token).transferFrom(jit, address(this), amount1ToAdd);
 
             // Modify liquidity in the pool
             poolManager.modifyLiquidity(
