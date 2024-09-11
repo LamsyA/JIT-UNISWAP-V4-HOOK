@@ -18,6 +18,8 @@ import {BeforeSwapDelta, toBeforeSwapDelta} from "@uniswap/v4-core/src/types/Bef
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {Quoter} from "v4-periphery/src/lens/Quoter.sol";
 import {SwapMath} from "v4-periphery/lib/v4-core/src/libraries/SwapMath.sol";
+import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+
 
 contract RouterHook is BaseHook {
     using StateLibrary for IPoolManager;
@@ -33,6 +35,12 @@ contract RouterHook is BaseHook {
     mapping(address token0 => mapping(address token1 => address rebalancerAddress)) public deployedRebalancerAddress;
     int256 LARGE_SWAP_THRESHOLD = -1 ether;
 
+    /**
+     * 
+     * @param _token0  address of token0 for the rebalance factory
+     * @param _token1  address of token1 for the rebalance factory 
+     * @return address of the deployed JITRebalancer
+     */
     function rebalancerFactory(address _token0, address _token1) public returns (address) {
         address rebalance = deployedRebalancerAddress[_token0][_token1];
         require(rebalance == address(0), "JIT: Hook already deployed for pair");
@@ -109,20 +117,51 @@ contract RouterHook is BaseHook {
         return (this.beforeSwap.selector, delta, 0);
     }
 
+    /**
+     * 
+     * @param _token0  the token0 address to get the factory 
+     * @param _token1  the token1 address to get the factory
+     * @return the address of the factory
+     */
     function getFactoryAddress(address _token0, address _token1) public view returns (address) {
         address rebalance = deployedRebalancerAddress[_token0][_token1];
         return rebalance;
     }
-
+    /**
+     * 
+     * @param value the value to get the absolute value
+     * @return the absolute value
+     */
     function absoluteValue(int256 value) internal pure returns (uint256) {
         return value >= 0 ? uint256(value) : uint256(-value);
     }
 
+    /**
+     * 
+     * @param tick  the current tick
+     * @param tickSpacing  the tick spacing
+     * @return the lower usable tick
+     */
     function getLowerUsableTick(int24 tick, int24 tickSpacing) private pure returns (int24) {
         int24 intervals = tick / tickSpacing;
         if (tick < 0 && tick % tickSpacing != 0) intervals--; // round towards negative infinity
         return intervals * tickSpacing;
     }
+
+     /**
+      * 
+      * @param _token The address of the token to get the price.
+      * @return The price of the token.
+      */
+     function _getTokenPrice(address _token) public view returns (int256) {
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(_token);
+        (,int256 price,,,) = priceFeed.latestRoundData();
+        return price;
+    }
+
+    /**
+     * @notice get the hook permissions
+     */
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
         return Hooks.Permissions({
