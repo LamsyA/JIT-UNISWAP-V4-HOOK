@@ -1,31 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-// import {BaseHook} from "v4-periphery/src/base/hooks/BaseHook.sol";
+
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-// import {CurrencyLibrary, Currency} from "v4-core/types/Currency.sol";
-// import {PoolKey} from "v4-core/types/PoolKey.sol";
-// import {BalanceDeltaLibrary, BalanceDelta} from "v4-core/types/BalanceDelta.sol";
-// import {PoolId, PoolIdLibrary} from "v4-core/types/PoolId.sol";
-// import {PoolKey} from "v4-core/types/PoolKey.sol";
-// import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
-// import {TickMath} from "v4-core/libraries/TickMath.sol";
-// import {BalanceDelta} from "v4-core/types/BalanceDelta.sol";
-// import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
-// import {FixedPointMathLib} from "solmate/src/utils/FixedPointMathLib.sol";
-// import {Hooks} from "v4-core/libraries/Hooks.sol";
-// import {RouterHook} from "./RouterHook.sol";
+import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
 contract JITRebalancer is ERC20 {
     IERC20 public token0;
     IERC20 public token1;
 
     uint256 public totalDeposited;
+    address public pricefeed;
 
-    constructor(address _token0, address _token1, address _routerHook) ERC20("JIT TOken", "JIT") {
+    constructor(address _token0, address _token1, address _routerHook, address _pricefeed) ERC20("JIT TOken", "JIT") {
         token0 = IERC20(_token0);
         token1 = IERC20(_token1);
+        pricefeed = _pricefeed;
         token0.approve(_routerHook, type(uint256).max);
         token1.approve(_routerHook, type(uint256).max);
     }
@@ -64,5 +55,14 @@ contract JITRebalancer is ERC20 {
         totalDeposited -= shareAmount;
         token0.transfer(msg.sender, token0Amount);
         token1.transfer(msg.sender, token1Amount);
+    }
+
+    /**
+      * @notice Gets the price of the token.
+      * @return The price of the token.
+      */
+    function _getPrice() public view returns (int256) {
+        (, int256 price,,,)= AggregatorV3Interface(pricefeed).latestRoundData();
+        return int256(price)/ 1e8;
     }
 }

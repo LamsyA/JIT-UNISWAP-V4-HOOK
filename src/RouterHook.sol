@@ -39,7 +39,7 @@ contract RouterHook is BaseHook {
         address rebalance = deployedRebalancerAddress[_token0][_token1];
         require(rebalance == address(0), "JIT: Hook already deployed for pair");
 
-        JITRebalancer jitRebalancer = new JITRebalancer(_token0, _token1, address(this));
+        JITRebalancer jitRebalancer = new JITRebalancer(_token0, _token1, address(this), address(0));
         deployedRebalancerAddress[_token0][_token1] = address(jitRebalancer);
         return address(jitRebalancer);
     }
@@ -51,6 +51,9 @@ contract RouterHook is BaseHook {
         bytes calldata hookData
     ) external override returns (bytes4, BeforeSwapDelta, uint24) {
         address jit = getFactoryAddress(Currency.unwrap(key.currency0), Currency.unwrap(key.currency1));
+        int256 price = JITRebalancer(jit)._getPrice();
+
+        uint tokenInUsd = uint256(swapParams.amountSpecified) * uint256(price);
         require(jit != address(0), "pool doesn't exist for pair");
 
         // Get the current price, tick, and liquidity from the pool
@@ -70,8 +73,10 @@ contract RouterHook is BaseHook {
             feePips
         );
 
-        // Handle JIT liquidity only for large swaps
-        if (absoluteValue(swapParams.amountSpecified) > LARGE_SWAP_THRESHOLD) {
+        // for large swaps but will only work on testnet and mainnet in production
+        // if (absoluteValue(int256(tokenInUsd)) > LARGE_SWAP_THRESHOLD) {
+            // Handle JIT liquidity only for large swaps
+        if (absoluteValue(int256(swapParams.amountSpecified)) > LARGE_SWAP_THRESHOLD) {
             bool zeroForOne = swapParams.zeroForOne;
             address token = zeroForOne ? Currency.unwrap(key.currency1) : Currency.unwrap(key.currency0);
 

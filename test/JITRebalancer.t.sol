@@ -17,7 +17,8 @@ contract JITRebalancerTest is Test {
     function setUp() public {
         token0 = new MockERC20();
         token1 = new MockERC20();
-        jitRebalancer = new JITRebalancer(address(token0), address(token1), router);
+        // to be changed later
+        jitRebalancer = new JITRebalancer(address(token0), address(token1), router, address(0));
     }
 
     function test_deposit() public {
