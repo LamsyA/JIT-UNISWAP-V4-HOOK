@@ -198,4 +198,11 @@ contract RouterHookTest is Test, Deployers {
         assertEq(MockERC20(Currency.unwrap(token1)).balanceOf(pairPool), 100000 ether);
         assertEq(MockERC20(Currency.unwrap(token1)).balanceOf(address(routerHook)), 0);
     }
+    function test_getTokenPrice() public view {
+        // eth address on sepolia is 0x694AA1769357215DE4FAC081bf1f309aDC325306
+       address  tokenAddress = address(0x694AA1769357215DE4FAC081bf1f309aDC325306);
+        int256 token0 =  routerHook._getTokenPrice(tokenAddress);
+
+        console2.log("token0 price", token0);
+    }
 }
