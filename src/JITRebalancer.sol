@@ -64,6 +64,7 @@ contract JITRebalancer is ERC20 {
       */
     function _getPrice() public view returns (int256) {
         (, int256 price,,,)= AggregatorV3Interface(pricefeed).latestRoundData();
-        return int256(price)/ 1e8;
+        int256 retunredPrice =  int256(price) / 1e8;
+        return retunredPrice;
     }
 }
