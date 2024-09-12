@@ -80,7 +80,7 @@ contract RouterHook is BaseHook {
             sqrtPriceX96,
             sqrtPriceTargetX96,
             liquidity,
-            adjustAmountSpecified(swapParams.zeroForOne, swapParams.amountSpecified),
+            swapParams.amountSpecified,
             feePips
         );
 
