@@ -28,7 +28,7 @@ contract JITRebalancer is ERC20 {
     // totalminted is now 2 wei..
     // user a when withdrawing will be 50% of token 0 and 50% of token 1....
 
-    function depositLiquidity(uint256 amount) public {
+    function depositLiquidity(uint256 amount) public { // 500 100%...  token1 500 100% 
         require(amount > 0, "Must deposit more than 0");
         token0.transferFrom(msg.sender, address(this), amount);
         uint256 sharesToMint = calculateShares(amount);

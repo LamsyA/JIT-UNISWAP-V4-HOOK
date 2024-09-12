@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {Test, console2} from "forge-std/Test.sol";
 import {JITRebalancer} from "../src/JITRebalancer.sol";
 import {MockERC20} from "../src/mock/MockERC20.sol";
-import {HelperConfig} from "../script/helperConfig.sol";
+import {HelperConfig} from "../script/HelperConfig.sol";
 
 contract JITRebalancerTest is Test {
     JITRebalancer jitRebalancer;
@@ -45,7 +45,7 @@ contract JITRebalancerTest is Test {
         vm.stopPrank();
 
         vm.startPrank(user1);
-        jitRebalancer.withdrawLiquidity(1 ether);
+        jitRebalancer.withdrawLiquidity(1 ether, user1);
         console2.log(jitRebalancer.balanceOf(user1), token0.balanceOf(user1), token1.balanceOf(user1));
         assertEq(jitRebalancer.balanceOf(user1), 0);
         assertApproxEqAbs(

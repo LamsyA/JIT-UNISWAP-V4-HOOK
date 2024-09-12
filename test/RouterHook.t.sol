@@ -5,7 +5,7 @@ import {Test, console2, console} from "forge-std/Test.sol";
 import {JITRebalancer} from "../src/JITRebalancer.sol";
 import {MockERC20} from "../src/mock/MockERC20.sol";
 import {BaseHook} from "v4-periphery/src/base/hooks/BaseHook.sol";
-import {HelperConfig} from "../script/helperConfig.sol";
+import {HelperConfig} from "../script/HelperConfig.sol";
 
 import {PoolSwapTest} from "v4-core/test/PoolSwapTest.sol";
 import {Constants} from "v4-periphery/lib/v4-core/test/utils/Constants.sol";
@@ -109,8 +109,8 @@ contract RouterHookTest is Test, Deployers {
         assertEq(pairPool, expectedPairPool);
         console2.log("pair address", pairPool);
 
-        MockERC20(Currency.unwrap(token0)).mint(pairPool, 100000 ether);
-        MockERC20(Currency.unwrap(token1)).mint(pairPool, 100000 ether);
+        MockERC20(Currency.unwrap(token0)).mint(pairPool, 100_000 ether);
+        MockERC20(Currency.unwrap(token1)).mint(pairPool, 100_000 ether);
 
         assertEq(MockERC20(Currency.unwrap(token0)).balanceOf(pairPool), 100000 ether);
         assertEq(MockERC20(Currency.unwrap(token1)).balanceOf(pairPool), 100000 ether);
@@ -121,32 +121,35 @@ contract RouterHookTest is Test, Deployers {
         uint160 ticks = TickMath.getSqrtPriceAtTick(180);
         IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
             zeroForOne: true,
-            amountSpecified: -20000 ether,
-            sqrtPriceLimitX96:  TickMath.MIN_SQRT_PRICE + 1 
+
+            amountSpecified: -10000 ether,
+            sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
+
         });
 
         PoolSwapTest.TestSettings memory testSettings =
             PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false});
         // console2.log("key", key);
 
-        // bool zeroForOne = true;
-        // uint160 MAX_SLIPPAGE = zeroForOne ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1;
    
         console2.log("before JIT balance for token 0", MockERC20(Currency.unwrap(token0)).balanceOf(pairPool));
         console2.log("before JIT balance for token 1", MockERC20(Currency.unwrap(token1)).balanceOf(pairPool));
         
          BalanceDelta delta = swapRouter.swap(key, params, testSettings, ZERO_BYTES);
 
+
         emit NewBalanceDelta(delta.amount0(), delta.amount1());
         // assertLt(MockERC20(Currency.unwrap(token1)).balanceOf(pairPool), 100000 ether);
+
         console2.log("After JIT balance for token 0", MockERC20(Currency.unwrap(token0)).balanceOf(pairPool));
         console2.log("After JIT balance for token 1", MockERC20(Currency.unwrap(token1)).balanceOf(pairPool));
 
         assertLt(MockERC20(Currency.unwrap(token0)).balanceOf(address(routerHook)), 20000 ether);
+
         console2.log(
             MockERC20(Currency.unwrap(token0)).balanceOf(pairPool),
             MockERC20(Currency.unwrap(token1)).balanceOf(pairPool),
-            MockERC20(Currency.unwrap(token0)).balanceOf(address(routerHook)),
+            MockERC20(Currency.unwrap(token0)).balanceOf(address(jit)),
             MockERC20(Currency.unwrap(token1)).balanceOf(address(routerHook))
         );
         console2.log("balance of router hook", MockERC20(Currency.unwrap(token1)).balanceOf(address(routerHook)));
