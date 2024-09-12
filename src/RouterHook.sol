@@ -20,7 +20,9 @@ import {Quoter} from "v4-periphery/src/lens/Quoter.sol";
 import {SwapMath} from "v4-periphery/lib/v4-core/src/libraries/SwapMath.sol";
 import {LiquidityAmounts} from "v4-periphery/lib/v4-core/test/utils/LiquidityAmounts.sol";
 import {Constants} from "v4-periphery/lib/v4-core/test/utils/Constants.sol";
+
 import {CurrencySettler} from "v4-periphery/lib/v4-core/test/utils/CurrencySettler.sol";
+import {console2} from "forge-std/console2.sol";
 
 contract RouterHook is BaseHook {
     using StateLibrary for IPoolManager;
@@ -40,11 +42,11 @@ contract RouterHook is BaseHook {
     mapping(address token0 => mapping(address token1 => address rebalancerAddress)) public deployedRebalancerAddress;
     uint256 LARGE_SWAP_THRESHOLD = 1 ether;
 
-    function rebalancerFactory(address _token0, address _token1) public returns (address) {
+    function rebalancerFactory(address _token0, address _token1, address _priceFeed) public returns (address) {
         address rebalance = deployedRebalancerAddress[_token0][_token1];
         require(rebalance == address(0), "JIT: Hook already deployed for pair");
 
-        JITRebalancer jitRebalancer = new JITRebalancer(_token0, _token1, address(this));
+        JITRebalancer jitRebalancer = new JITRebalancer(_token0, _token1, address(this),_priceFeed );
         deployedRebalancerAddress[_token0][_token1] = address(jitRebalancer);
         IERC20(_token0).approve(address(poolManager), type(uint256).max);
         IERC20(_token1).approve(address(poolManager), type(uint256).max);
@@ -59,6 +61,10 @@ contract RouterHook is BaseHook {
         bytes calldata hookData
     ) external override returns (bytes4, BeforeSwapDelta, uint24) {
         address jit = getFactoryAddress(Currency.unwrap(key.currency0), Currency.unwrap(key.currency1));
+        int256 price = JITRebalancer(jit)._getPrice();
+        console2.log(" Jit Price Feed for the Token ", absoluteValue(swapParams.amountSpecified * price));
+
+        uint tokenInUsd = absoluteValue(swapParams.amountSpecified * price);
         require(jit != address(0), "pool doesn't exist for pair");
 
         // Get the current price, tick, and liquidity from the pool
@@ -78,8 +84,10 @@ contract RouterHook is BaseHook {
             feePips
         );
 
-        // Handle JIT liquidity only for large swaps
-        if (absoluteValue(swapParams.amountSpecified) > LARGE_SWAP_THRESHOLD) {
+        // for large swaps but will only work on testnet and mainnet in production
+        // if (absoluteValue(int256(tokenInUsd)) > LARGE_SWAP_THRESHOLD) {
+            // Handle JIT liquidity only for large swaps
+        if (tokenInUsd > LARGE_SWAP_THRESHOLD) {
             bool zeroForOne = swapParams.zeroForOne;
             address token = zeroForOne ? Currency.unwrap(key.currency1) : Currency.unwrap(key.currency0);
 
