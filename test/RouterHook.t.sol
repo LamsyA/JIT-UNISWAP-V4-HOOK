@@ -120,9 +120,9 @@ contract RouterHookTest is Test, Deployers {
         test_router_can_factory_and_mint_tokens();
         uint160 ticks = TickMath.getSqrtPriceAtTick(180);
         IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
-            zeroForOne: true,
+            zeroForOne: false,
             amountSpecified: -20000 ether,
-            sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1 
+            sqrtPriceLimitX96: TickMath.MAX_SQRT_PRICE - 1
         });
 
         PoolSwapTest.TestSettings memory testSettings =
