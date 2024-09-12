@@ -5,7 +5,7 @@ import {JITRebalancer} from "./JITRebalancer.sol";
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {BaseHook} from "v4-periphery/src/base/hooks/BaseHook.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {CurrencyLibrary, Currency} from "v4-core/types/Currency.sol";
+import {Currency} from "v4-core/types/Currency.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {BalanceDeltaLibrary, BalanceDelta} from "v4-core/types/BalanceDelta.sol";
 import {PoolId, PoolIdLibrary} from "v4-core/types/PoolId.sol";
@@ -20,15 +20,20 @@ import {Quoter} from "v4-periphery/src/lens/Quoter.sol";
 import {SwapMath} from "v4-periphery/lib/v4-core/src/libraries/SwapMath.sol";
 import {LiquidityAmounts} from "v4-periphery/lib/v4-core/test/utils/LiquidityAmounts.sol";
 import {Constants} from "v4-periphery/lib/v4-core/test/utils/Constants.sol";
+import {CurrencySettler} from "v4-periphery/lib/v4-core/test/utils/CurrencySettler.sol";
 
 contract RouterHook is BaseHook {
     using StateLibrary for IPoolManager;
     using PoolIdLibrary for PoolKey;
     using FixedPointMathLib for uint256;
-    using CurrencyLibrary for Currency;
+    // using CurrencyLibrary for Currency;
     using BalanceDeltaLibrary for BalanceDelta;
+    using CurrencySettler for Currency;
 
     Quoter public quoter;
+    int24 tickUpper;
+    int24 tickLower;
+    uint128 liquidityDelta;
 
     constructor(IPoolManager _manager) BaseHook(_manager) {}
 
@@ -85,8 +90,8 @@ contract RouterHook is BaseHook {
             int24 newTick = TickMath.getTickAtSqrtPrice(sqrtPriceNextX96); // Get the higher tick range
 
             // Ensure tick spacing for liquidity range
-            int24 tickUpper = getLowerUsableTick(newTick, key.tickSpacing);
-            int24 tickLower = tickUpper > 0 ? -tickUpper : tickUpper + tickUpper;
+            tickUpper = getLowerUsableTick(newTick, key.tickSpacing);
+            tickLower = tickUpper > 0 ? -tickUpper : tickUpper + tickUpper;
 
             // inrare cses when upper tick is min tick available do this
             if (tickLower < TickMath.MIN_TICK) {
@@ -99,17 +104,13 @@ contract RouterHook is BaseHook {
             uint160 sqrtPriceAtTickUpper = TickMath.getSqrtPriceAtTick(tickUpper);
 
             // Calculate the liquidity amount to add
-            uint128 liquidityDelta =
-                LiquidityAmounts.getLiquidityForAmount0(sqrtPriceAtTickLower, sqrtPriceAtTickUpper, amount);
+            liquidityDelta = LiquidityAmounts.getLiquidityForAmount0(sqrtPriceAtTickLower, sqrtPriceAtTickUpper, amount);
 
             uint256 amount1ToAdd =
                 LiquidityAmounts.getAmount1ForLiquidity(sqrtPriceAtTickLower, sqrtPriceAtTickUpper, liquidityDelta);
 
-            // Withdraw tokens from JIT address (pool) to contract
-            IERC20(token).transferFrom(jit, address(this), amount1ToAdd);
-
             // Modify liquidity in the pool
-            poolManager.modifyLiquidity(
+            (BalanceDelta delta,) = poolManager.modifyLiquidity(
                 key,
                 IPoolManager.ModifyLiquidityParams({
                     tickLower: tickLower,
@@ -119,6 +120,18 @@ contract RouterHook is BaseHook {
                 }),
                 hookData
             );
+
+            int256 delta0 = delta.amount0();
+            int256 delta1 = delta.amount1();
+            if (delta0 < 0) {
+                // Withdraw tokens from JIT address (pool) to contract
+                IERC20(Currency.unwrap(key.currency0)).transferFrom(jit, address(this), uint256(-delta0));
+                key.currency0.settle(poolManager, address(this), uint256(-delta0), false);
+            }
+            if (delta1 < 0) {
+                IERC20(Currency.unwrap(key.currency1)).transferFrom(jit, address(this), uint256(-delta1));
+                key.currency1.settle(poolManager, address(this), uint256(-delta1), false);
+            }
         }
 
         // Convert amounts to BeforeSwapDelta format (for exact input or output)
@@ -126,10 +139,37 @@ contract RouterHook is BaseHook {
         int128 deltaUnspecified = swapParams.zeroForOne ? -int128(int256(amountOut)) : int128(int256(amountOut));
 
         // Create the BeforeSwapDelta structure
-        BeforeSwapDelta delta = toBeforeSwapDelta(deltaSpecified, deltaUnspecified);
+        BeforeSwapDelta deltas = toBeforeSwapDelta(deltaSpecified, deltaUnspecified);
 
         // Return the result
-        return (this.beforeSwap.selector, delta, 0);
+        return (this.beforeSwap.selector, deltas, 0);
+    }
+
+    function afterSwap(
+        address,
+        PoolKey calldata key,
+        IPoolManager.SwapParams calldata params,
+        BalanceDelta delta,
+        bytes calldata data
+    ) external override returns (bytes4, int128) {
+        address jit = getFactoryAddress(Currency.unwrap(key.currency0), Currency.unwrap(key.currency1));
+
+        (BalanceDelta delta,) = poolManager.modifyLiquidity(
+            key,
+            IPoolManager.ModifyLiquidityParams({
+                tickLower: tickLower,
+                tickUpper: tickUpper,
+                liquidityDelta: -int256(uint256(liquidityDelta)),
+                salt: 0
+            }),
+            data
+        );
+        int256 delta0 = delta.amount0();
+        int256 delta1 = delta.amount1();
+
+        if (delta0 > 0) key.currency0.take(poolManager, jit, uint256(delta0), false);
+        if (delta1 > 0) key.currency1.take(poolManager, jit, uint256(delta1), false);
+        return (this.afterSwap.selector, 0);
     }
 
     function getFactoryAddress(address _token0, address _token1) public view returns (address) {
@@ -178,13 +218,18 @@ contract RouterHook is BaseHook {
             afterAddLiquidity: false,
             afterRemoveLiquidity: false,
             beforeSwap: true,
-            afterSwap: false,
+            afterSwap: true,
             beforeDonate: false,
-            afterDonate: true,
+            afterDonate: false,
             beforeSwapReturnDelta: false,
             afterSwapReturnDelta: false,
             afterAddLiquidityReturnDelta: false,
             afterRemoveLiquidityReturnDelta: false
         });
     }
+
+    //  emit ModifyLiquidity(id: 0x3aeea0032e651541041ada41cb0fde0bc636bd982a2f96b380b1386f75643142, sender: 0x0000000000000000000000000000000000000090, tickLower: -887220 [-8.872e5], tickUpper: 887220 [8.872e5], liquidityDelta: 1087, salt: 0x0000000000000000000000000000000000000000000000000000000000000000)
+    // │   │   │   │   │   │   └─ ← [Return] -369546650476139171321224823670900277642303 [-3.695e41], 0
+    // │   │   │   │   │   └─ ← [Return] 0x575e24b400000000000000000000000000000000000000000000000000000000, 43278204585152792458121845457856988224279144801112299133847492746854685736958 [4.327e76], 0
+    // │   │   │   │   ├─ emit Swap(id: 0x3aeea0032e651541041ada41cb0fde0bc636bd982a2f96b380b1386f75643142, sender: PoolSwapTest: [0x2e234DAe75C793f67A35089C9d99245E1C58470b], amount0: 10084758373167360942 [1.008e19], amount1: -20000000000000000000000 [-2e22], sqrtPriceX96: 158059469412476785435708826149760 [1.58e32], liquidity: 10000000000000001087 [1e19], tick: 151975 [1.519e5], fee: 3000)
 }
