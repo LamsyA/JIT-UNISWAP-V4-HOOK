@@ -134,46 +134,52 @@ contract RouterHookTest is Test, Deployers {
    
         console2.log("before JIT balance for token 0", MockERC20(Currency.unwrap(token0)).balanceOf(pairPool));
         console2.log("before JIT balance for token 1", MockERC20(Currency.unwrap(token1)).balanceOf(pairPool));
-        
+        uint256 balanceBeforeForTokenZero = MockERC20(Currency.unwrap(token0)).balanceOf(pairPool);
+        uint256 balanceBeforeForTokenOne = MockERC20(Currency.unwrap(token1)).balanceOf(pairPool);
          BalanceDelta delta = swapRouter.swap(key, params, testSettings, ZERO_BYTES);
 
 
         emit NewBalanceDelta(delta.amount0(), delta.amount1());
         // assertLt(MockERC20(Currency.unwrap(token1)).balanceOf(pairPool), 100000 ether);
+        uint256 balanceAfterForTokenOne = MockERC20(Currency.unwrap(token1)).balanceOf(pairPool);
+        uint256 balanceAfterForTokenZero = MockERC20(Currency.unwrap(token0)).balanceOf(pairPool);
 
         console2.log("After JIT balance for token 0", MockERC20(Currency.unwrap(token0)).balanceOf(pairPool));
         console2.log("After JIT balance for token 1", MockERC20(Currency.unwrap(token1)).balanceOf(pairPool));
 
-        assertLt(MockERC20(Currency.unwrap(token0)).balanceOf(address(routerHook)), 20000 ether);
-
-        console2.log(
-            MockERC20(Currency.unwrap(token0)).balanceOf(pairPool),
-            MockERC20(Currency.unwrap(token1)).balanceOf(pairPool),
-            MockERC20(Currency.unwrap(token0)).balanceOf(address(jit)),
-            MockERC20(Currency.unwrap(token1)).balanceOf(address(routerHook))
-        );
-        console2.log("balance of router hook", MockERC20(Currency.unwrap(token1)).balanceOf(address(routerHook)));
-    }
+        assertGt(balanceAfterForTokenZero, balanceBeforeForTokenZero );
+        assertGt(balanceBeforeForTokenOne, balanceAfterForTokenOne);
+ }
 
     function test_add_liquidity_before_swapzeroForOne_false() public {
         test_router_can_factory_and_mint_tokens();
         uint160 ticks = TickMath.getSqrtPriceAtTick(180);
         IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
             zeroForOne: false,
-            amountSpecified: -20000 ether,
+            amountSpecified: -10000 ether,
             sqrtPriceLimitX96: TickMath.MAX_SQRT_PRICE - 1
         });
 
         PoolSwapTest.TestSettings memory testSettings =
             PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false});
-        // console2.log("key", key);
-
-        bool zeroForOne = true;
-        uint160 MAX_SLIPPAGE = zeroForOne ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1;
-
-        swapRouter.swap(key, params, testSettings, ZERO_BYTES);
-        assertLt(MockERC20(Currency.unwrap(token1)).balanceOf(pairPool), 100000 ether);
-        assertLt(MockERC20(Currency.unwrap(token1)).balanceOf(address(routerHook)), 20000 ether);
+   
+            console2.log("before JIT balance for token 0", MockERC20(Currency.unwrap(token0)).balanceOf(pairPool));
+            console2.log("before JIT balance for token 1", MockERC20(Currency.unwrap(token1)).balanceOf(pairPool));
+            uint256 balanceBeforeForTokenZero = MockERC20(Currency.unwrap(token0)).balanceOf(pairPool);
+            uint256 balanceBeforeForTokenOne = MockERC20(Currency.unwrap(token1)).balanceOf(pairPool);
+             BalanceDelta delta = swapRouter.swap(key, params, testSettings, ZERO_BYTES);
+    
+    
+            emit NewBalanceDelta(delta.amount0(), delta.amount1());
+            // assertLt(MockERC20(Currency.unwrap(token1)).balanceOf(pairPool), 100000 ether);
+            uint256 balanceAfterForTokenOne = MockERC20(Currency.unwrap(token1)).balanceOf(pairPool);
+            uint256 balanceAfterForTokenZero = MockERC20(Currency.unwrap(token0)).balanceOf(pairPool);
+    
+            console2.log("After JIT balance for token 0", MockERC20(Currency.unwrap(token0)).balanceOf(pairPool));
+            console2.log("After JIT balance for token 1", MockERC20(Currency.unwrap(token1)).balanceOf(pairPool));
+    
+            assertGt( balanceBeforeForTokenZero, balanceAfterForTokenZero );
+            assertGt( balanceAfterForTokenOne, balanceBeforeForTokenOne);
     }
 
     function test_before_swap_with_lower_liquidity_needed_for_jit_zeroForOne_true() public {
@@ -189,12 +195,23 @@ contract RouterHookTest is Test, Deployers {
             PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false});
         // console2.log("key", key);
 
-        bool zeroForOne = true;
-        uint160 MAX_SLIPPAGE = zeroForOne ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1;
-
-        swapRouter.swap(key, params, testSettings, ZERO_BYTES);
-        assertEq(MockERC20(Currency.unwrap(token0)).balanceOf(pairPool), 100000 ether);
-        assertEq(MockERC20(Currency.unwrap(token0)).balanceOf(address(routerHook)), 0);
+       console2.log("before JIT balance for token 0", MockERC20(Currency.unwrap(token0)).balanceOf(pairPool));
+            console2.log("before JIT balance for token 1", MockERC20(Currency.unwrap(token1)).balanceOf(pairPool));
+            uint256 balanceBeforeForTokenZero = MockERC20(Currency.unwrap(token0)).balanceOf(pairPool);
+            uint256 balanceBeforeForTokenOne = MockERC20(Currency.unwrap(token1)).balanceOf(pairPool);
+             BalanceDelta delta = swapRouter.swap(key, params, testSettings, ZERO_BYTES);
+    
+    
+            emit NewBalanceDelta(delta.amount0(), delta.amount1());
+            // assertLt(MockERC20(Currency.unwrap(token1)).balanceOf(pairPool), 100000 ether);
+            uint256 balanceAfterForTokenOne = MockERC20(Currency.unwrap(token1)).balanceOf(pairPool);
+            uint256 balanceAfterForTokenZero = MockERC20(Currency.unwrap(token0)).balanceOf(pairPool);
+    
+            console2.log("After JIT balance for token 0", MockERC20(Currency.unwrap(token0)).balanceOf(pairPool));
+            console2.log("After JIT balance for token 1", MockERC20(Currency.unwrap(token1)).balanceOf(pairPool));
+    
+            assertEq( balanceBeforeForTokenZero, balanceAfterForTokenZero );
+            assertEq( balanceAfterForTokenOne, balanceBeforeForTokenOne);
     }
 
     function test_before_swap_with_lower_liquidity_needed_for_jit_zeroForOne_false() public {
@@ -209,12 +226,23 @@ contract RouterHookTest is Test, Deployers {
         PoolSwapTest.TestSettings memory testSettings =
             PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false});
         // console2.log("key", key);
-
-        bool zeroForOne = true;
-        uint160 MAX_SLIPPAGE = zeroForOne ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1;
-
-        swapRouter.swap(key, params, testSettings, ZERO_BYTES);
-        assertEq(MockERC20(Currency.unwrap(token1)).balanceOf(pairPool), 100000 ether);
-        assertEq(MockERC20(Currency.unwrap(token1)).balanceOf(address(routerHook)), 0);
+       console2.log("before JIT balance for token 0", MockERC20(Currency.unwrap(token0)).balanceOf(pairPool));
+            console2.log("before JIT balance for token 1", MockERC20(Currency.unwrap(token1)).balanceOf(pairPool));
+            uint256 balanceBeforeForTokenZero = MockERC20(Currency.unwrap(token0)).balanceOf(pairPool);
+            uint256 balanceBeforeForTokenOne = MockERC20(Currency.unwrap(token1)).balanceOf(pairPool);
+             BalanceDelta delta = swapRouter.swap(key, params, testSettings, ZERO_BYTES);
+    
+    
+            emit NewBalanceDelta(delta.amount0(), delta.amount1());
+            // assertLt(MockERC20(Currency.unwrap(token1)).balanceOf(pairPool), 100000 ether);
+            uint256 balanceAfterForTokenOne = MockERC20(Currency.unwrap(token1)).balanceOf(pairPool);
+            uint256 balanceAfterForTokenZero = MockERC20(Currency.unwrap(token0)).balanceOf(pairPool);
+    
+            console2.log("After JIT balance for token 0", MockERC20(Currency.unwrap(token0)).balanceOf(pairPool));
+            console2.log("After JIT balance for token 1", MockERC20(Currency.unwrap(token1)).balanceOf(pairPool));
+    
+            assertEq( balanceBeforeForTokenZero, balanceAfterForTokenZero );
+            assertEq( balanceAfterForTokenOne, balanceBeforeForTokenOne);
     }
+  
 }

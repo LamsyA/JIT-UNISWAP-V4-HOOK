@@ -29,19 +29,23 @@ contract JITRebalancerTest is Test {
     function test_deposit() public {
         vm.startPrank(user1);
         token0.mint(user1, 1 ether);
+        token1.mint(user1, 1 ether);
         token1.mint(address(jitRebalancer), 1 ether);
         token0.approve(address(jitRebalancer), 1 ether);
-        jitRebalancer.depositLiquidity(0.5 ether);
+        token1.approve(address(jitRebalancer), 1 ether);
+        jitRebalancer.depositLiquidity(0.5 ether, 0.5 ether);
         console2.log(jitRebalancer.balanceOf(user1));
-        jitRebalancer.depositLiquidity(0.5 ether);
+        jitRebalancer.depositLiquidity(0.5 ether, 0.5 ether);
         console2.log(jitRebalancer.balanceOf(user1));
         console2.log("--------------------------------");
         vm.stopPrank();
 
         vm.startPrank(user2);
         token0.mint(user2, 1 ether);
+        token1.mint(user2, 1 ether);
         token0.approve(address(jitRebalancer), 1 ether);
-        jitRebalancer.depositLiquidity(0.5 ether);
+        token1.approve(address(jitRebalancer), 1 ether);
+        jitRebalancer.depositLiquidity(0.5 ether, 0.5 ether);
         vm.stopPrank();
 
         vm.startPrank(user1);
@@ -50,14 +54,14 @@ contract JITRebalancerTest is Test {
         assertEq(jitRebalancer.balanceOf(user1), 0);
         assertApproxEqAbs(
             token0.balanceOf(user1),
-            token0.balanceOf(address(jitRebalancer)) * 1 ether / jitRebalancer.totalSupply(),
+            jitRebalancer.totalDepositedToken0() * 1 ether / jitRebalancer.totalSupply(),
             10 wei,
             "not eq token 0"
         );
         // (token0.balanceOf(user1), token0.balanceOf(address(jitRebalancer)) * 1 ether / jitRebalancer.totalSupply());
         assertApproxEqAbs(
             token1.balanceOf(user1),
-            token1.balanceOf(address(jitRebalancer)) * 1 ether / jitRebalancer.totalSupply(),
+            jitRebalancer.totalDepositedToken1() * 1 ether / jitRebalancer.totalSupply(),
             10 wei,
             "not eq token 1"
         );
