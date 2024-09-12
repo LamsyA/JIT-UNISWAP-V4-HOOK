@@ -47,15 +47,15 @@ contract JITRebalancer is ERC20 {
     }
 
     /// @notice Withdraw liquidity and receive token0 and token1 proportionally to pool shares
-    function withdrawLiquidity(uint256 shareAmount) external {
+    function withdrawLiquidity(uint256 shareAmount,address withdrawTo) external {
         require(shareAmount > 0, "Must withdraw more than 0");
         require(balanceOf(msg.sender) >= shareAmount, "Insufficient balance");
         uint256 token0Amount = (token0.balanceOf(address(this)) * shareAmount) / totalSupply();
         uint256 token1Amount = (token1.balanceOf(address(this)) * shareAmount) / totalSupply();
         _burn(msg.sender, shareAmount);
         totalDeposited -= shareAmount;
-        token0.transfer(msg.sender, token0Amount);
-        token1.transfer(msg.sender, token1Amount);
+        token0.transfer( withdrawTo, token0Amount);
+        token1.transfer( withdrawTo, token1Amount);
     }
 
     /**
