@@ -68,6 +68,7 @@ contract JITRebalancerTest is Test {
 
         // assertEq(token1.balanceOf(user1), token1.balanceOf(address(jitRebalancer)) * 1 ether / jitRebalancer.totalSupply());
     }
+
     function test_getPrice() public view {
         console2.log(jitRebalancer._getPrice());
     }

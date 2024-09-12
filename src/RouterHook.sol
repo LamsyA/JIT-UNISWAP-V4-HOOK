@@ -27,8 +27,8 @@ contract RouterHook is BaseHook {
     using PoolIdLibrary for PoolKey;
     using BalanceDeltaLibrary for BalanceDelta;
     using CurrencySettler for Currency;
-    int256 price ;
 
+    int256 price;
 
     int24 tickUpper;
     int24 tickLower;
@@ -37,16 +37,18 @@ contract RouterHook is BaseHook {
     constructor(IPoolManager _manager) BaseHook(_manager) {}
 
     mapping(address token0 => mapping(address token1 => address rebalancerAddress)) public deployedRebalancerAddress;
-    uint256 constant private LARGE_SWAP_THRESHOLD = 1e7;
-    uint256 constant private SWAP_BALANCER = 1e18 ;
-     error HookAlreadyDeployedForPair();
-     error PoolDoesnotExistForPair();
+    uint256 private constant LARGE_SWAP_THRESHOLD = 1e7;
+    uint256 private constant SWAP_BALANCER = 1e18;
+
+    error HookAlreadyDeployedForPair();
+    error PoolDoesnotExistForPair();
+
     function rebalancerFactory(address _token0, address _token1, address _priceFeed) public returns (address) {
         address rebalance = deployedRebalancerAddress[_token0][_token1];
         address reverseBalance = deployedRebalancerAddress[_token1][_token0];
         require(rebalance == address(0) && reverseBalance == address(0), HookAlreadyDeployedForPair());
 
-        JITRebalancer jitRebalancer = new JITRebalancer(_token0, _token1, address(this),_priceFeed );
+        JITRebalancer jitRebalancer = new JITRebalancer(_token0, _token1, address(this), _priceFeed);
         deployedRebalancerAddress[_token0][_token1] = address(jitRebalancer);
         IERC20(_token0).approve(address(poolManager), type(uint256).max);
         IERC20(_token1).approve(address(poolManager), type(uint256).max);
@@ -61,14 +63,16 @@ contract RouterHook is BaseHook {
         bytes calldata hookData
     ) external override returns (bytes4, BeforeSwapDelta, uint24) {
         address jit = getFactoryAddress(Currency.unwrap(key.currency0), Currency.unwrap(key.currency1));
-         price = JITRebalancer(jit)._getPrice();
-        console2.log(" Jit Price Feed for the Token ", absoluteValue(swapParams.amountSpecified  * price)/ SWAP_BALANCER );
+        price = JITRebalancer(jit)._getPrice();
+        console2.log(
+            " Jit Price Feed for the Token ", absoluteValue(swapParams.amountSpecified * price) / SWAP_BALANCER
+        );
 
-        uint tokenInUsd = absoluteValue(swapParams.amountSpecified  * price)/ SWAP_BALANCER;
+        uint256 tokenInUsd = absoluteValue(swapParams.amountSpecified * price) / SWAP_BALANCER;
         require(jit != address(0), PoolDoesnotExistForPair());
 
         // Get the current price, tick, and liquidity from the pool
-        (uint160 sqrtPriceX96, ,,) = poolManager.getSlot0(key.toId());
+        (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(key.toId());
         uint128 liquidity = poolManager.getLiquidity(key.toId());
         uint24 feePips = key.fee; // Retrieve the fee
 
@@ -76,18 +80,11 @@ contract RouterHook is BaseHook {
         uint160 sqrtPriceTargetX96 = swapParams.zeroForOne ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1;
 
         // Use computeSwapStep to get the next price, amounts, and fees
-        (uint160 sqrtPriceNextX96, uint256 amountIn, uint256 amountOut, ) = SwapMath.computeSwapStep(
-            sqrtPriceX96,
-            sqrtPriceTargetX96,
-            liquidity,
-            swapParams.amountSpecified,
-            feePips
-        );
+        (uint160 sqrtPriceNextX96, uint256 amountIn, uint256 amountOut,) =
+            SwapMath.computeSwapStep(sqrtPriceX96, sqrtPriceTargetX96, liquidity, swapParams.amountSpecified, feePips);
 
-
-            // Handle JIT liquidity only for large swaps
+        // Handle JIT liquidity only for large swaps
         if (tokenInUsd > LARGE_SWAP_THRESHOLD) {
-
             // Convert amountSpecified to absolute value to avoid negative amounts for JIT
             uint256 amount = absoluteValue(swapParams.amountSpecified);
 
@@ -159,26 +156,25 @@ contract RouterHook is BaseHook {
     ) external override returns (bytes4, int128) {
         address jit = getFactoryAddress(Currency.unwrap(key.currency0), Currency.unwrap(key.currency1));
 
-        uint tokenInUsd = absoluteValue(params.amountSpecified  * price)/ SWAP_BALANCER;
+        uint256 tokenInUsd = absoluteValue(params.amountSpecified * price) / SWAP_BALANCER;
 
         if (tokenInUsd > LARGE_SWAP_THRESHOLD) {
+            (BalanceDelta _delta,) = poolManager.modifyLiquidity(
+                key,
+                IPoolManager.ModifyLiquidityParams({
+                    tickLower: tickLower,
+                    tickUpper: tickUpper,
+                    liquidityDelta: -int256(uint256(liquidityDelta)),
+                    salt: 0
+                }),
+                data
+            );
+            int256 delta0 = _delta.amount0();
+            int256 delta1 = _delta.amount1();
 
-        (BalanceDelta _delta,) = poolManager.modifyLiquidity(
-            key,
-            IPoolManager.ModifyLiquidityParams({
-                tickLower: tickLower,
-                tickUpper: tickUpper,
-                liquidityDelta: -int256(uint256(liquidityDelta)),
-                salt: 0
-            }),
-            data
-        );
-        int256 delta0 = _delta.amount0();
-        int256 delta1 = _delta.amount1();
-
-        if (delta0 > 0) key.currency0.take(poolManager, jit, uint256(delta0), false);
-        if (delta1 > 0) key.currency1.take(poolManager, jit, uint256(delta1), false);
-    }
+            if (delta0 > 0) key.currency0.take(poolManager, jit, uint256(delta0), false);
+            if (delta1 > 0) key.currency1.take(poolManager, jit, uint256(delta1), false);
+        }
         return (this.afterSwap.selector, 0);
     }
 
@@ -224,5 +220,4 @@ contract RouterHook is BaseHook {
             afterRemoveLiquidityReturnDelta: false
         });
     }
-
 }
