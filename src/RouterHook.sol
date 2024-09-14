@@ -61,7 +61,7 @@ contract RouterHook is BaseHook {
         PoolKey calldata key,
         IPoolManager.SwapParams calldata swapParams,
         bytes calldata hookData
-    ) external override returns (bytes4, BeforeSwapDelta, uint24) {
+    ) external override onlyPoolManager returns (bytes4, BeforeSwapDelta, uint24) {
         address jit = getFactoryAddress(Currency.unwrap(key.currency0), Currency.unwrap(key.currency1));
         price = JITRebalancer(jit)._getPrice();
         console2.log(
@@ -94,12 +94,6 @@ contract RouterHook is BaseHook {
             // Ensure tick spacing for liquidity range
             tickUpper = getLowerUsableTick(newTick, key.tickSpacing);
             tickLower = tickUpper > 0 ? -tickUpper : tickUpper + tickUpper;
-
-            // inrare cses when upper tick is min tick available do this
-            // if (tickLower < TickMath.MIN_TICK) {
-            //     tickLower = getUpperUsableTick(newTick, key.tickSpacing);
-            //     tickUpper = -tickLower;
-            // }
 
             // Get sqrt prices at the tick boundaries
             uint160 sqrtPriceAtTickLower = TickMath.getSqrtPriceAtTick(tickLower);
@@ -153,7 +147,7 @@ contract RouterHook is BaseHook {
         IPoolManager.SwapParams calldata params,
         BalanceDelta delta,
         bytes calldata data
-    ) external override returns (bytes4, int128) {
+    ) external override onlyPoolManager returns (bytes4, int128) {
         address jit = getFactoryAddress(Currency.unwrap(key.currency0), Currency.unwrap(key.currency1));
 
         uint256 tokenInUsd = absoluteValue(params.amountSpecified * price) / SWAP_BALANCER;
