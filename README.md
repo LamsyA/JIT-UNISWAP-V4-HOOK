@@ -1,8 +1,16 @@
-# JIT V4 Hook
+# JIT Rebalancer Hook
+
+<h1 align="center">
+  <br>
+  <a href="#"><img src="./image/img.jpeg" alt="Tit_logo" width="200"></a>
+  <br>
+ Rebalancer
+  <br>
+</h1>
 
 ## Overview
 
-This project implements a Just-In-Time (JIT) liquidity provider hook for Uniswap V4. The hook is designed to dynamically add liquidity right before large swaps take place, ensuring liquidity providers can maximize their profit from such swaps and their is no slippage for the swap which makes it more profitable and a win-win for all parties involved. The JIT V4 hook integrates with the Chainlink Price Feed to accurately calculate the amount of liquidity to be added at the time of the swap based on current token prices. After the swap, the remaining liquidity and profit are automatically removed and sent back to the JIT hook contract.
+This project implements a Just-In-Time (JIT) liquidity provider hook for Uniswap V4. The hook is designed to dynamically add liquidity right before large swaps take place, ensuring liquidity providers can maximize their profit from such swaps and their is no slippage for the swap which makes it more profitable and a win-win for all parties involved. The JIT V4 hook integrates with the Chainlink Price Feed to accurately calculate the amount of liquidity to be added at the time of the swap based on current token prices. After the swap, the remaining liquidity and profit are automatically removed and sent back to our pair pool contract.
 
 ## Table of Contents
 
@@ -15,9 +23,6 @@ This project implements a Just-In-Time (JIT) liquidity provider hook for Uniswap
     - [JIT Hook Contract](#jit-hook-contract)
     - [Chainlink Price Feed](#chainlink-price-feed)
     - [Uniswap V4 Integration](#uniswap-v4-integration)
-  - [How to Install](#how-to-install)
-    - [Prerequisites](#prerequisites)
-    - [Steps](#steps)
   - [Usage](#usage)
     - [Rebalancer Factory](#rebalancer-factory)
     - [Trigger Swap Handling](#trigger-swap-handling)
@@ -31,7 +36,7 @@ This project implements a Just-In-Time (JIT) liquidity provider hook for Uniswap
 - **Dynamic Liquidity Provisioning:** The hook calculates the amount of liquidity to provide based on the size of the swap and the price of the token at the time of the swap.
 - **Chainlink Price Feed Integration:** The real-time price of tokens is fetched using the Chainlink Price Feed, allowing the JIT hook to provide accurate liquidity based on market conditions.
 - **Post-Swap Liquidity Removal:** After the swap occurs, the liquidity and profit are removed, and the funds are sent back to the JIT hook contract.
-- **Supports Pair Deposits:** Liquidity providers can deposit token pairs into the JIT hook to be used for liquidity provision.
+- **Supports Pair Deposits:** Liquidity providers can deposit token pairs our JIT hook to be used for liquidity provision.
 
 ## How It Works
 
@@ -41,7 +46,7 @@ This project implements a Just-In-Time (JIT) liquidity provider hook for Uniswap
 4. **Liquidity Addition:** The calculated liquidity is provided to the Uniswap V4 pool just before the swap is executed.
 5. **Swap Execution:** The swap is carried out with the newly added liquidity.
 6. **Profit Collection:** After the swap, the JIT hook automatically removes the remaining liquidity and collects any profits made from the transaction.
-7. **Profit Distribution:** The removed liquidity and profits are sent back to the JIT hook contract.
+7. **Profit Distribution:** The removed liquidity and profits are sent back to the pair pool contract.
 
 ## Components
 
@@ -49,11 +54,10 @@ This project implements a Just-In-Time (JIT) liquidity provider hook for Uniswap
 
 This is the core smart contract that manages the dynamic liquidity provisioning and profit distribution.
 
-- **`depositLiquidity()`**: Allows liquidity providers (LPs) to deposit token pairs into the JIT hook.
-- **`calculateLiquidity()`**: Uses the Chainlink Price Feed to determine how much liquidity to add based on the size of the swap and the token price at that moment.
-- **`addLiquidity()`**: Adds liquidity to the Uniswap V4 pool right before the swap.
-- **`removeLiquidity()`**: Removes liquidity and profits after the swap, sending them back to the JIT hook.
-- **`fetchPrice()`**: Fetches the current token price from Chainlink Price Feed.
+- **`rebalancerFactory()`**: Responsible for creating pair pools.
+- **`depositLiquidity()`**: Allows liquidity providers (LPs) to deposit token pairs into our pair pool.
+- **`withdrawLiquidity()`**: Removes liquidity and profits after the swap, sending them back to our pair pool.
+- **`_getPrice()`**: Fetches the current token price from Chainlink Price Feed.
 
 ### Chainlink Price Feed
 
@@ -62,28 +66,6 @@ This is the external oracle that provides the real-time price data for tokens in
 ### Uniswap V4 Integration
 
 The JIT hook is integrated with the Uniswap V4 pool contract, enabling it to interact with the pool, add liquidity, and remove liquidity dynamically around swaps.
-
-## How to Install
-
-### Prerequisites
-
-- Solidity development environment (e.g., Hardhat or Foundry)
-- Access to a Uniswap V4 pool
-- Chainlink Price Feed contract addresses for tokens
-- LP tokens to deposit into the JIT hook
-
-### Steps
-
-1. Clone the repository.
-2. Install dependencies:
-   ```bash
-   forge install
-   ```
-3. Configure the environment with the relevant Chainlink Price Feed addresses and Uniswap V4 pool addresses.
-4. Compile the smart contract:
-   ```bash
-   forge compile
-   ```
 
 ## Usage
 
@@ -107,7 +89,7 @@ When a large swap is detected, the JIT hook will automatically execute the follo
 
 ### Withdraw Liquidity & Profits
 
-After the swap, liquidity providers can withdraw their profits from the JIT hook.
+Over time, liquidity providers can withdraw their profits from the JIT hook and sent directly to a centralized exchange.
 
 ```solidity
 function withdrawLiquidity(uint256 shareAmount, address withdrawTo) external;
@@ -123,7 +105,7 @@ function _getPrice() public view returns (int256);
 
 ### Calculation Logic
 
-The hook uses the current price to estimate how much liquidity should be provided. The formula depends on the swap size and the price returned by Chainlink.
+The hook uses the current price via chainlink to determine swaps that are eligble for JIT rebalancing.
 
 ## License
 
