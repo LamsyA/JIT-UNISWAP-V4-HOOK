@@ -17,6 +17,7 @@ This project implements a Just-In-Time (JIT) liquidity provider hook for Uniswap
 - [JIT Rebalancer Hook](#jit-rebalancer-hook)
   - [Overview](#overview)
   - [Table of Contents](#table-of-contents)
+  - [Video Walkthrough](#video-walkthrough)
   - [Key Features](#key-features)
   - [How It Works](#how-it-works)
   - [Components](#components)
@@ -32,6 +33,14 @@ This project implements a Just-In-Time (JIT) liquidity provider hook for Uniswap
     - [Calculation Logic](#calculation-logic)
     - [Error Handling](#error-handling)
   - [License](#license)
+
+## Video Walkthrough
+
+This is a video walkthrough of the [project](https://www.loom.com/share/5616f7db693f474181518abfc36af18a?sid=ac1902c1-61bb-4d1b-a7c1-6aec7cf15739).
+
+[![Watch the video](./image/jit.png)](https://www.loom.com/share/5616f7db693f474181518abfc36af18a?sid=ac1902c1-61bb-4d1b-a7c1-6aec7cf15739)
+
+[Video 2](https://www.loom.com/share/01e01a41fcc8410f91e34c199676b452?sid=def9ea04-e64d-4cd8-b6a2-fa61eee8d165)
 
 ## Key Features
 
@@ -89,8 +98,8 @@ When a large swap is detected, the JIT hook will automatically execute the follo
 4. Execute the swap.
 5. Remove the remaining liquidity and collect profits `afterSwap`.
 
-
 ### Deposit Liquidity
+
 ```solidity
 function depositLiquidity(uint256 amount0, uint256 amount1) public
 ```
@@ -128,9 +137,8 @@ function _getPrice() public view returns (int256);
 
 The hook uses the current price via chainlink to determine swaps that are eligble for JIT rebalancing.
 
-
-
 ### Error Handling
+
 The contract includes custom error handling for better gas efficiency:
 DepositMustBeGreaterThanZero: Raised when a deposit amount is zero.
 WithdrawalMustBeGreaterThanZero: Raised when a withdrawal amount is zero.
