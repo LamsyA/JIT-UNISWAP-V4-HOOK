@@ -5,6 +5,8 @@ import {JITRebalancer} from "./JITRebalancer.sol";
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {BaseHook} from "v4-periphery/src/base/hooks/BaseHook.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import {Currency} from "v4-core/types/Currency.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {BalanceDeltaLibrary, BalanceDelta} from "v4-core/types/BalanceDelta.sol";
@@ -22,7 +24,7 @@ import {Constants} from "v4-periphery/lib/v4-core/test/utils/Constants.sol";
 import {CurrencySettler} from "v4-periphery/lib/v4-core/test/utils/CurrencySettler.sol";
 import {console2} from "forge-std/console2.sol";
 
-contract RouterHook is BaseHook {
+contract RouterHook is BaseHook, ReentrancyGuard, Ownable(msg.sender) {
     using StateLibrary for IPoolManager;
     using PoolIdLibrary for PoolKey;
     using BalanceDeltaLibrary for BalanceDelta;
@@ -36,23 +38,42 @@ contract RouterHook is BaseHook {
 
     constructor(IPoolManager _manager) BaseHook(_manager) {}
 
-    mapping(address token0 => mapping(address token1 => address rebalancerAddress)) public deployedRebalancerAddress;
+    mapping(address token0 => mapping(address token1 => address rebalancerAddress))
+        public deployedRebalancerAddress;
     uint256 private constant LARGE_SWAP_THRESHOLD = 1e7;
     uint256 private constant SWAP_BALANCER = 1e18;
 
     error HookAlreadyDeployedForPair();
     error PoolDoesnotExistForPair();
 
-    function rebalancerFactory(address _token0, address _token1, address _priceFeed) public returns (address) {
+    function rebalancerFactory(
+        address _token0,
+        address _token1,
+        address _priceFeed
+    ) public onlyOwner returns (address) {
         address rebalance = deployedRebalancerAddress[_token0][_token1];
         address reverseBalance = deployedRebalancerAddress[_token1][_token0];
-        require(rebalance == address(0) && reverseBalance == address(0), HookAlreadyDeployedForPair());
+        require(
+            rebalance == address(0) || reverseBalance == address(0),
+            HookAlreadyDeployedForPair()
+        );
 
-        JITRebalancer jitRebalancer = new JITRebalancer(_token0, _token1, address(this), _priceFeed);
+        JITRebalancer jitRebalancer = new JITRebalancer(
+            _token0,
+            _token1,
+            address(this),
+            _priceFeed
+        );
         deployedRebalancerAddress[_token0][_token1] = address(jitRebalancer);
+        deployedRebalancerAddress[_token1][_token0] = address(jitRebalancer);
         IERC20(_token0).approve(address(poolManager), type(uint256).max);
         IERC20(_token1).approve(address(poolManager), type(uint256).max);
 
+        revokeUnUsedAllowances(
+            IERC20(_token0),
+            IERC20(_token1),
+            address(poolManager)
+        );
         return address(jitRebalancer);
     }
 
@@ -61,27 +82,50 @@ contract RouterHook is BaseHook {
         PoolKey calldata key,
         IPoolManager.SwapParams calldata swapParams,
         bytes calldata hookData
-    ) external override onlyPoolManager returns (bytes4, BeforeSwapDelta, uint24) {
-        address jit = getFactoryAddress(Currency.unwrap(key.currency0), Currency.unwrap(key.currency1));
+    )
+        external
+        override
+        onlyPoolManager
+        nonReentrant
+        returns (bytes4, BeforeSwapDelta, uint24)
+    {
+        address jit = getFactoryAddress(
+            Currency.unwrap(key.currency0),
+            Currency.unwrap(key.currency1)
+        );
         price = JITRebalancer(jit)._getPrice();
         console2.log(
-            " Jit Price Feed for the Token ", absoluteValue(swapParams.amountSpecified * price) / SWAP_BALANCER
+            " Jit Price Feed for the Token ",
+            absoluteValue(swapParams.amountSpecified * price) / SWAP_BALANCER
         );
 
-        uint256 tokenInUsd = absoluteValue(swapParams.amountSpecified * price) / SWAP_BALANCER;
+        uint256 tokenInUsd = absoluteValue(swapParams.amountSpecified * price) /
+            SWAP_BALANCER;
         require(jit != address(0), PoolDoesnotExistForPair());
 
         // Get the current price, tick, and liquidity from the pool
-        (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(key.toId());
+        (uint160 sqrtPriceX96, , , ) = poolManager.getSlot0(key.toId());
         uint128 liquidity = poolManager.getLiquidity(key.toId());
         uint24 feePips = key.fee; // Retrieve the fee
 
         // Set target price for the swap direction
-        uint160 sqrtPriceTargetX96 = swapParams.zeroForOne ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1;
+        uint160 sqrtPriceTargetX96 = swapParams.zeroForOne
+            ? TickMath.MIN_SQRT_PRICE + 1
+            : TickMath.MAX_SQRT_PRICE - 1;
 
         // Use computeSwapStep to get the next price, amounts, and fees
-        (uint160 sqrtPriceNextX96, uint256 amountIn, uint256 amountOut,) =
-            SwapMath.computeSwapStep(sqrtPriceX96, sqrtPriceTargetX96, liquidity, swapParams.amountSpecified, feePips);
+        (
+            uint160 sqrtPriceNextX96,
+            uint256 amountIn,
+            uint256 amountOut,
+
+        ) = SwapMath.computeSwapStep(
+                sqrtPriceX96,
+                sqrtPriceTargetX96,
+                liquidity,
+                swapParams.amountSpecified,
+                feePips
+            );
 
         // Handle JIT liquidity only for large swaps
         if (tokenInUsd > LARGE_SWAP_THRESHOLD) {
@@ -96,17 +140,24 @@ contract RouterHook is BaseHook {
             tickLower = tickUpper > 0 ? -tickUpper : tickUpper + tickUpper;
 
             // Get sqrt prices at the tick boundaries
-            uint160 sqrtPriceAtTickLower = TickMath.getSqrtPriceAtTick(tickLower);
-            uint160 sqrtPriceAtTickUpper = TickMath.getSqrtPriceAtTick(tickUpper);
+            uint160 sqrtPriceAtTickLower = TickMath.getSqrtPriceAtTick(
+                tickLower
+            );
+            uint160 sqrtPriceAtTickUpper = TickMath.getSqrtPriceAtTick(
+                tickUpper
+            );
 
             // Calculate the liquidity amount to add
-            liquidityDelta = LiquidityAmounts.getLiquidityForAmount0(sqrtPriceAtTickLower, sqrtPriceAtTickUpper, amount);
-
+            liquidityDelta = LiquidityAmounts.getLiquidityForAmount0(
+                sqrtPriceAtTickLower,
+                sqrtPriceAtTickUpper,
+                amount
+            );
             // uint256 amount1ToAdd =
             //     LiquidityAmounts.getAmount1ForLiquidity(sqrtPriceAtTickLower, sqrtPriceAtTickUpper, liquidityDelta);
 
             // Modify liquidity in the pool
-            (BalanceDelta delta,) = poolManager.modifyLiquidity(
+            (BalanceDelta delta, ) = poolManager.modifyLiquidity(
                 key,
                 IPoolManager.ModifyLiquidityParams({
                     tickLower: tickLower,
@@ -121,21 +172,54 @@ contract RouterHook is BaseHook {
             int256 delta1 = delta.amount1();
             if (delta0 < 0) {
                 // Withdraw tokens from JIT address (pool) to contract
-                IERC20(Currency.unwrap(key.currency0)).transferFrom(jit, address(this), uint256(-delta0));
-                key.currency0.settle(poolManager, address(this), uint256(-delta0), false);
+                require(
+                    IERC20(Currency.unwrap(key.currency0)).transferFrom(
+                        jit,
+                        address(this),
+                        uint256(-delta0)
+                    ),
+                    "ROUTER HOOK: Transfer Failed"
+                );
+
+                key.currency0.settle(
+                    poolManager,
+                    address(this),
+                    uint256(-delta0),
+                    false
+                );
             }
             if (delta1 < 0) {
-                IERC20(Currency.unwrap(key.currency1)).transferFrom(jit, address(this), uint256(-delta1));
-                key.currency1.settle(poolManager, address(this), uint256(-delta1), false);
+                require(
+                    IERC20(Currency.unwrap(key.currency1)).transferFrom(
+                        jit,
+                        address(this),
+                        uint256(-delta1)
+                    ),
+                    "ROUTER HOOK: Transfer Failed"
+                );
+
+                key.currency1.settle(
+                    poolManager,
+                    address(this),
+                    uint256(-delta1),
+                    false
+                );
             }
         }
 
         // Convert amounts to BeforeSwapDelta format (for exact input or output)
-        int128 deltaSpecified = swapParams.zeroForOne ? int128(int256(amountIn)) : -int128(int256(amountIn));
-        int128 deltaUnspecified = swapParams.zeroForOne ? -int128(int256(amountOut)) : int128(int256(amountOut));
+        int128 deltaSpecified = swapParams.zeroForOne
+            ? int128(int256(amountIn))
+            : -int128(int256(amountIn));
+        int128 deltaUnspecified = swapParams.zeroForOne
+            ? -int128(int256(amountOut))
+            : int128(int256(amountOut));
 
         // Create the BeforeSwapDelta structure
-        BeforeSwapDelta deltas = toBeforeSwapDelta(deltaSpecified, deltaUnspecified);
+        BeforeSwapDelta deltas = toBeforeSwapDelta(
+            deltaSpecified,
+            deltaUnspecified
+        );
 
         // Return the result
         return (this.beforeSwap.selector, deltas, 0);
@@ -148,12 +232,16 @@ contract RouterHook is BaseHook {
         BalanceDelta delta,
         bytes calldata data
     ) external override onlyPoolManager returns (bytes4, int128) {
-        address jit = getFactoryAddress(Currency.unwrap(key.currency0), Currency.unwrap(key.currency1));
+        address jit = getFactoryAddress(
+            Currency.unwrap(key.currency0),
+            Currency.unwrap(key.currency1)
+        );
 
-        uint256 tokenInUsd = absoluteValue(params.amountSpecified * price) / SWAP_BALANCER;
+        uint256 tokenInUsd = absoluteValue(params.amountSpecified * price) /
+            SWAP_BALANCER;
 
         if (tokenInUsd > LARGE_SWAP_THRESHOLD) {
-            (BalanceDelta _delta,) = poolManager.modifyLiquidity(
+            (BalanceDelta _delta, ) = poolManager.modifyLiquidity(
                 key,
                 IPoolManager.ModifyLiquidityParams({
                     tickLower: tickLower,
@@ -166,13 +254,18 @@ contract RouterHook is BaseHook {
             int256 delta0 = _delta.amount0();
             int256 delta1 = _delta.amount1();
 
-            if (delta0 > 0) key.currency0.take(poolManager, jit, uint256(delta0), false);
-            if (delta1 > 0) key.currency1.take(poolManager, jit, uint256(delta1), false);
+            if (delta0 > 0)
+                key.currency0.take(poolManager, jit, uint256(delta0), false);
+            if (delta1 > 0)
+                key.currency1.take(poolManager, jit, uint256(delta1), false);
         }
         return (this.afterSwap.selector, 0);
     }
 
-    function getFactoryAddress(address _token0, address _token1) public view returns (address) {
+    function getFactoryAddress(
+        address _token0,
+        address _token1
+    ) public view returns (address) {
         address rebalance = deployedRebalancerAddress[_token0][_token1];
         return rebalance;
     }
@@ -181,13 +274,19 @@ contract RouterHook is BaseHook {
         return value >= 0 ? uint256(value) : uint256(-value);
     }
 
-    function getLowerUsableTick(int24 tick, int24 tickSpacing) private pure returns (int24) {
+    function getLowerUsableTick(
+        int24 tick,
+        int24 tickSpacing
+    ) private pure returns (int24) {
         int24 intervals = tick / tickSpacing;
         if (tick < 0 && tick % tickSpacing != 0) intervals--; // round towards negative infinity
         return intervals * tickSpacing;
     }
 
-    function getUpperUsableTick(int24 tick, int24 tickSpacing) private pure returns (int24) {
+    function getUpperUsableTick(
+        int24 tick,
+        int24 tickSpacing
+    ) private pure returns (int24) {
         int24 intervals = tick / tickSpacing;
         // If the tick is not perfectly aligned, move up to the next interval
         if (tick % tickSpacing != 0) {
@@ -196,22 +295,37 @@ contract RouterHook is BaseHook {
         return intervals * tickSpacing;
     }
 
-    function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
-        return Hooks.Permissions({
-            beforeInitialize: false,
-            afterInitialize: false,
-            beforeAddLiquidity: false,
-            beforeRemoveLiquidity: false,
-            afterAddLiquidity: false,
-            afterRemoveLiquidity: false,
-            beforeSwap: true,
-            afterSwap: true,
-            beforeDonate: false,
-            afterDonate: false,
-            beforeSwapReturnDelta: false,
-            afterSwapReturnDelta: false,
-            afterAddLiquidityReturnDelta: false,
-            afterRemoveLiquidityReturnDelta: false
-        });
+    function getHookPermissions()
+        public
+        pure
+        override
+        returns (Hooks.Permissions memory)
+    {
+        return
+            Hooks.Permissions({
+                beforeInitialize: false,
+                afterInitialize: false,
+                beforeAddLiquidity: false,
+                beforeRemoveLiquidity: false,
+                afterAddLiquidity: false,
+                afterRemoveLiquidity: false,
+                beforeSwap: true,
+                afterSwap: true,
+                beforeDonate: false,
+                afterDonate: false,
+                beforeSwapReturnDelta: false,
+                afterSwapReturnDelta: false,
+                afterAddLiquidityReturnDelta: false,
+                afterRemoveLiquidityReturnDelta: false
+            });
+    }
+
+    function revokeUnUsedAllowances(
+        IERC20 token0,
+        IERC20 token1,
+        address spender
+    ) internal {
+        IERC20(token0).approve(spender, 0);
+        IERC20(token1).approve(spender, 0);
     }
 }

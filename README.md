@@ -14,7 +14,7 @@ This project implements a Just-In-Time (JIT) liquidity provider hook for Uniswap
 
 ## Table of Contents
 
-- [JIT V4 Hook](#jit-v4-hook)
+- [JIT Rebalancer Hook](#jit-rebalancer-hook)
   - [Overview](#overview)
   - [Table of Contents](#table-of-contents)
   - [Key Features](#key-features)
@@ -26,9 +26,11 @@ This project implements a Just-In-Time (JIT) liquidity provider hook for Uniswap
   - [Usage](#usage)
     - [Rebalancer Factory](#rebalancer-factory)
     - [Trigger Swap Handling](#trigger-swap-handling)
+    - [Deposit Liquidity](#deposit-liquidity)
     - [Withdraw Liquidity \& Profits](#withdraw-liquidity--profits)
     - [Chainlink Price Fetching](#chainlink-price-fetching)
     - [Calculation Logic](#calculation-logic)
+    - [Error Handling](#error-handling)
   - [License](#license)
 
 ## Key Features
@@ -87,9 +89,27 @@ When a large swap is detected, the JIT hook will automatically execute the follo
 4. Execute the swap.
 5. Remove the remaining liquidity and collect profits `afterSwap`.
 
+
+### Deposit Liquidity
+```solidity
+function depositLiquidity(uint256 amount0, uint256 amount1) public
+```
+
+**`Description`**: Allows users to deposit amount0 of token0 and amount1 of token1 into the pool. Users receive shares proportional to their deposit.
+**`Parameters`**:
+amount0: Amount of token0 to deposit.
+amount1: Amount of token1 to deposit.
+Requirements: Both amounts must be greater than zero.
+
 ### Withdraw Liquidity & Profits
 
 Over time, liquidity providers can withdraw their profits from the JIT hook and sent directly to a centralized exchange.
+
+**`Description`**: Allows users to withdraw their share of token0 and token1 from the pool.
+**`Parameters`**:
+shareAmount: The number of shares to burn for withdrawal.
+withdrawTo: The address to which the tokens will be sent.
+Requirements: The share amount must be greater than zero, and the user must have sufficient shares.
 
 ```solidity
 function withdrawLiquidity(uint256 shareAmount, address withdrawTo) external;
@@ -97,7 +117,8 @@ function withdrawLiquidity(uint256 shareAmount, address withdrawTo) external;
 
 ### Chainlink Price Fetching
 
-The `_getPrice()()` function queries Chainlink to get the latest price for a given token pair.
+**Description**: Fetches the latest price of the tokens from the Chainlink price feed.
+Returns: The price of the token as an int256.
 
 ```solidity
 function _getPrice() public view returns (int256);
@@ -106,6 +127,14 @@ function _getPrice() public view returns (int256);
 ### Calculation Logic
 
 The hook uses the current price via chainlink to determine swaps that are eligble for JIT rebalancing.
+
+
+
+### Error Handling
+The contract includes custom error handling for better gas efficiency:
+DepositMustBeGreaterThanZero: Raised when a deposit amount is zero.
+WithdrawalMustBeGreaterThanZero: Raised when a withdrawal amount is zero.
+InsufficientBalance: Raised when a user tries to withdraw more than their balance.
 
 ## License
 
