@@ -8,7 +8,7 @@ import "../src/lib/Utils.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import {console2} from "forge-std/console2.sol";
 
-contract JITRebalancer is ERC20, ReentrancyGuard {
+contract JITRebalancer is ERC20, ReentrancyGuard, Utils {
     IERC20 public token0;
     IERC20 public token1;
 
@@ -61,7 +61,12 @@ contract JITRebalancer is ERC20, ReentrancyGuard {
         );
 
         // Calculate shares to mint based on the proportional amount of both tokens
-        uint256 sharesToMint = calculateShares(amount0, amount1);
+        uint256 sharesToMint = calculateShares(
+            amount0,
+            amount1,
+            totalDepositedToken0,
+            totalDepositedToken1
+        );
         _mint(msg.sender, sharesToMint);
 
         // Update the total deposited amounts for both tokens
@@ -105,32 +110,5 @@ contract JITRebalancer is ERC20, ReentrancyGuard {
             .latestRoundData();
         int256 retunredPrice = int256(price) / 1e8;
         return retunredPrice;
-    }
-
-    function calculateShares(
-        uint256 amount0,
-        uint256 amount1
-    ) internal view returns (uint256) {
-        if (totalSupply() == 0) {
-            // Initial liquidity, return the geometric mean of the two amounts
-            return sqrt(amount0 * amount1);
-        } else {
-            // Calculate shares proportional to both token0 and token1
-            uint256 totalLiquidity = totalDepositedToken0 +
-                totalDepositedToken1;
-            uint256 totalDeposit = amount0 + amount1;
-            return (totalDeposit * totalSupply()) / totalLiquidity;
-        }
-    }
-
-    function sqrt(uint256 x) internal pure returns (uint256) {
-        if (x == 0) return 0;
-        uint256 z = (x + 1) / 2;
-        uint256 y = x;
-        while (z < y) {
-            y = z;
-            z = (x / z + z) / 2;
-        }
-        return y;
     }
 }
