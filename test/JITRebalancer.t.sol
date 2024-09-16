@@ -42,7 +42,7 @@ contract JITRebalancerTest is Test {
         jitRebalancer.depositLiquidity(0.5 ether, 0.5 ether);
         console2.log(jitRebalancer.balanceOf(user1));
         jitRebalancer.depositLiquidity(0.5 ether, 0.5 ether);
-        console2.log(jitRebalancer.balanceOf(user1));
+        console2.log(" User 1 Balance After Deposit",jitRebalancer.balanceOf(user1));
         console2.log("--------------------------------");
         vm.stopPrank();
 
