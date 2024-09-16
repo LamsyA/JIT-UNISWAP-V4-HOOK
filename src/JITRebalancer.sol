@@ -105,7 +105,7 @@ contract JITRebalancer is ERC20, ReentrancyGuard, Utils {
      * @notice Gets the price of the token.
      * @return The price of the token.
      */
-    function _getPrice() public view returns (int256) {
+    function _getPrice(address pricefeed) public view returns (int256) {
         (, int256 price, , , ) = AggregatorV3Interface(pricefeed)
             .latestRoundData();
         int256 retunredPrice = int256(price) / 1e8;
