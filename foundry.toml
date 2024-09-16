@@ -9,5 +9,5 @@ remappings = ["@openzeppelin/=lib/openzeppelin-contracts/"]
 solc_version = '0.8.26'
 evm_version = "cancun"
 optimizer_runs = 800
-via_ir = false
+via-ir = true
 ffi = true
